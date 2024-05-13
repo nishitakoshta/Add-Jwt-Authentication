@@ -70,24 +70,44 @@ public class SecurityConfiguration {
                                 .authenticated())
                 .build();
     }
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
-    }
 }
 ```
-- Method for userLogin
+- To save encrepted password to the database, for which we will create class `ApplicationConfig` in the config package[we will add only bean method of passwordEncoder
+```
+@Bean
+public PasswordEncoder passwordEncoder() {
+  return new BCryptPasswordEncoder();
+}
+```
+#### Steps to authenticate
+- We need to validate out request (validate whether password & username is correct)
+- Verify whether user present or not
+```
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return username -> (UserDetails) userRepository.findByEmail(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+    }
+```
+- Which authenicationProvider --> DaoAuthenticationProvider (inject)
+- We need to authenticate using authenticationManager injecting this authenticationProvider
+```
+@Bean
+    public AuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
+        authenticationProvider.setUserDetailsService(userDetailsService());
+        authenticationProvider.setPasswordEncoder(passwordEncoder());
+        return authenticationProvider;
+    }
+```
+- Verify whether userName and password is correct => UserNamePasswordAuthenticationToken
+- Verify Whether user present in db
+- Generate token
+- Return token
 ```
 public JwtResponseDTO userLogin(AuthRequestDTO authRequestDTO) {
-        String username = authRequestDTO.getUsername();
+        String username = authRequestDTO.getEmail();
         String password = authRequestDTO.getPassword();
-        if (username == null || username.isEmpty() || password == null || password.isEmpty()) {
-            throw new IllegalArgumentException("Username or password is empty");
-        }
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(username, password));
         // Retrieve UserDetails after successful authentication
