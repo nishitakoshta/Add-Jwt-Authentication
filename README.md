@@ -74,7 +74,10 @@ public class JwtService {
 ```
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfiguration {
+    private final AuthenticationProvider authenticationProvider;
+    private final JwtAuthFilter jwtAuthFilter;
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
         return http
@@ -83,12 +86,17 @@ public class SecurityConfiguration {
                         req.requestMatchers("/api/v1/users/register")
                                 .permitAll()
                                 .requestMatchers("/api/v1/users/login").permitAll()
-                                .requestMatchers("/swagger-ui/index.html")
+                                .requestMatchers(Stream.of(ApiPathExclusion.values()).map(ApiPathExclusion::getPath)
+                                        .toArray(String[]::new))
                                 .permitAll()
                                 .anyRequest()
                                 .authenticated())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authenticationProvider(authenticationProvider)
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
+
 }
 ```
 - To save encrepted password to the database, for which we will create class `ApplicationConfig` in the config package[we will add only bean method of passwordEncoder
@@ -181,7 +189,10 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     //Verify if it is whitelisted path and if yes don't do anything
     @Override
     protected boolean shouldNotFilter(@NotNull HttpServletRequest request) throws ServletException {
-        return request.getServletPath().contains("/api/v1/users");
+        String path = request.getServletPath();
+        return path.contains("/api/v1/users") || // Existing whitelist
+                path.startsWith("/swagger-ui") ||  // Add Swagger UI paths
+                path.startsWith("/v3/api-docs");
     }
 }
 ```
