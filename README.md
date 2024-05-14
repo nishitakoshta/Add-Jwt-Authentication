@@ -104,8 +104,10 @@ public PasswordEncoder passwordEncoder() {
 ```
     @Bean
     public UserDetailsService userDetailsService() {
-        return username -> (UserDetails) userRepository.findByEmail(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        return username -> {
+            Users user = userRepository.findByEmail(username).orElseThrow();
+            return new CustomUserDetails(user);
+        };
     }
 ```
 - Which authenicationProvider --> DaoAuthenticationProvider (inject)
@@ -182,6 +184,23 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         return request.getServletPath().contains("/api/v1/users");
     }
 }
+```
+- Login Method
+```
+public JwtResponseDTO userLogin(AuthRequestDTO authRequestDTO) {
+        String username = authRequestDTO.getEmail();
+        String password = authRequestDTO.getPassword();
+        authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(username, password));
+        var user = usersRepository.findByEmail(username).orElseThrow();
+        // Retrieve UserDetails after successful authentication
+        // Generate JWT token using JwtService
+        String token = jwtService.generateToken(new CustomUserDetails(user));
+        // Create JwtResponseDTO with the generated token
+        return JwtResponseDTO.builder()
+                .accessToken(token)
+                .build();
+    }
 ```
 - Add JwtAuthFilter in `securityFilterChain`
 ```
