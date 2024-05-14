@@ -3,9 +3,9 @@
   ![IMG_2585](https://github.com/nishitakoshta/Add-Jwt-Authentication/assets/110012128/0d1eda21-bbee-4bb4-8c77-16b7a5b464c1)
 - To add jwt authentication we should have these dependency
   ```
-  implementation 'io.jsonwebtoken:jjwt-api:0.12.5'
-	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.5'
-	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.5'
+  implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+  runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+  runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
   ```
 - Create config package inside this create `JwtService` class
 ```
@@ -48,6 +48,25 @@ public class JwtService {
             authoritiesSet.add(authority.getAuthority());
         }
         return String.join(",",authoritiesSet);
+    }
+    private Claims extractAllClaims(String token) {
+        return Jwts.parserBuilder()
+                .setSigningKey(getSigningKey()).build()
+                .parseClaimsJws(token).getBody();
+    }
+    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver){
+        final Claims claims = extractAllClaims(token);
+        return claimsResolver.apply(claims);
+    }
+    public String extractEmail(String token) {
+        return extractClaim(token, claims -> claims.get("email", String.class));
+    }
+    public  boolean isTokenValid(String token, UserDetails userDetails){
+        final String userName = extractEmail(token);
+        return (userName.equals(userDetails.getUsername()));
+    }
+    public Integer extractUserRole(String token){
+        return extractClaim(token, claims -> claims.get("role", Integer.class));
     }
 }
 ```
@@ -119,4 +138,54 @@ public JwtResponseDTO userLogin(AuthRequestDTO authRequestDTO) {
                 .accessToken(token)
                 .build();
     }
+```
+#### Implement the JwtAuthFilter 
+- Create JwtAuthFilter class in config folder
+```
+@Component
+@RequiredArgsConstructor
+public class JwtAuthFilter extends OncePerRequestFilter {
+    private final JwtService jwtService;
+    private final UserDetailsService userDetailsService;
+    @Override
+    protected void doFilterInternal(@NotNull HttpServletRequest request,
+                                    @NotNull HttpServletResponse response, @NotNull FilterChain filterChain)
+            throws ServletException, IOException {
+        //Verify whether request has authorization header and it has bearer in it
+        final String authHeader = request.getHeader("Authorization");
+        final String jwt;
+        final String email;
+        if(authHeader == null || !authHeader.startsWith("Bearer ")){
+            filterChain.doFilter(request, response);
+        }
+        //Extract user from the token
+        assert authHeader != null;
+        //Verify whether user is present in db
+        // Verify whether token is valid
+        jwt = authHeader.substring(7);
+        email = jwtService.extractEmail(jwt);
+        if(email != null && SecurityContextHolder.getContext().getAuthentication() == null){
+            //if valid set to security context holder
+            UserDetails userDetails = this.userDetailsService.loadUserByUsername(email);
+            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                    userDetails,
+                    null,
+                    userDetails.getAuthorities()
+            );
+            SecurityContextHolder.getContext().setAuthentication(authToken);
+        }
+	filterChain.doFilter(request, response);
+    }
+    //Verify if it is whitelisted path and if yes don't do anything
+    @Override
+    protected boolean shouldNotFilter(@NotNull HttpServletRequest request) throws ServletException {
+        return request.getServletPath().contains("/api/v1/users");
+    }
+}
+```
+- Add JwtAuthFilter in `securityFilterChain`
+```
+.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+.authenticationProvider(authenticationProvider)
+.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
 ```
