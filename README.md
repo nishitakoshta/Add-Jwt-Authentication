@@ -208,6 +208,12 @@ public PasswordEncoder passwordEncoder() {
         return authenticationProvider;
     }
 ```
+```
+@Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+        return configuration.getAuthenticationManager();
+    }
+```
 - Verify whether userName and password is correct => UserNamePasswordAuthenticationToken
 - Verify Whether user present in db
 - Generate token
