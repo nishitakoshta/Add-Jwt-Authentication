@@ -136,6 +136,19 @@ public class JwtService {
     }
 }
 ```
+- Create package called `constant` inside this create `ApiPathExclusion` class to declare swagger resources
+```
+@Getter
+@AllArgsConstructor
+public enum ApiPathExclusion {
+
+    SWAGGER_RESOURCES("/swagger-resources/**"),
+    SWAGGER_UI_HTML("swagger-ui.html"), WEBJARS("/webjars/**"), SWAGGER_UI("/swagger-ui/**"),
+    SWAGGER_API_V3_DOCS("/v3/api-docs/**");
+
+    private final String path;
+}
+```
 - Create SecurityConfiguration class under the config package to whitelist the API
 ```
 @Configuration
